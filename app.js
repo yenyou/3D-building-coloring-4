@@ -30,16 +30,7 @@ require( [
 
     let _map;
     let _view;
-    let _vm;
-    let _sceneLayer;
-    let _sceneLayerView;
-    let _graphicsLayer;
-    let _featureLayer;
-    let _buildingLayer;
-    let _buildingLayerView;
-    let _pointLayer;
-    let _classOneList = [];
-    let _classTwoList = [];
+    let _graphicsLayer = new GraphicsLayer();
     let _center;
 
     setMap();
@@ -61,119 +52,99 @@ require( [
         _view = new SceneView( {
             map: _map,
             container: viewDiv,
-            center: [121.480087, 25.036869],
-            zoom: 18,
-            qualityProfile: 'high',
+            center: [121.480087, 25.016869],
+            zoom: 16,
+            qualityProfile: 'low',
+            navigation: {
+                gamepad: {
+                    enabled: false
+                },
+                browserTouchPanEnabled: false,
+                momentumEnabled: false,
+            }
         } );
     }
 
-    const renderer = {
-        type: "unique-value",
-        defaultSymbol: getSymbol( "#FFFFFF" ),
-        defaultLabel: "Other",
-        field: "classify",
-        uniqueValueInfos: [
-            {
-                value: "0",
-                symbol: getSymbol( "#A7C636" ),
-                label: "0"
-            },
-            {
-                value: "1",
-                symbol: getSymbol( "#FC921F" ),
-                label: "1"
-            },
-            {
-                value: "2",
-                symbol: getSymbol( "#ED5151" ),
-                label: "2"
-            },
-        ],
-        visualVariables: [
-            {
-                type: "size",
-                field: "z"
-            }
-        ]
+    const buildingsLayer = new FeatureLayer( {
+        url: "https://richimap2.richitech.com.tw/arcgis/rest/services/test/NCDR_SDE_Building_NTP/MapServer/0",
+    } );
 
-    };
+    _map.add( _graphicsLayer );
 
-    function getSymbol( color ) {
+    function renderBuilding() {
+        _center = getCenter();
+        buildingsLayer.queryFeatures( new Query( {
+            outFields: ["z", "classify", "OBJECTID", "BUILD_ID"],
+            geometry: {
+                type: "point",
+                x: _center[0],
+                y: _center[1],
+            },
+            spatialRelationship: "contains",
+            distance: 1000,
+            units: "meters",
+            returnGeometry: true
+        } ) ).then( results => {
+            results.features.forEach( ( item, index ) => {
+                item.symbol = getSymbol( item.attributes.classify, item.attributes.z );
+                _graphicsLayer.add( item );
+            } );
+        } );
+    }
+
+    function getCenter() {
+        return [_view.center.longitude, _view.center.latitude];
+    }
+
+    function getSymbol( classify, z ) {
+        const colorTable = {
+            0: '#AAAAAA',
+            1: '#DD0000',
+            2: '#00DD00',
+        };
         return {
             type: "polygon-3d",
             symbolLayers: [
                 {
                     type: "extrude",
                     material: {
-                        color: color
+                        color: colorTable[classify]
                     },
-                    edges: {
-                        type: "solid",
-                        color: "#999",
-                        size: 0.5
-                    }
+                    size: z
                 }
             ]
         };
     }
 
-
-    const buildingsLayer = new FeatureLayer( {
-        url: "https://richimap2.richitech.com.tw/arcgis/rest/services/test/NCDR_SDE_Building_NTP/MapServer/0",
-        renderer: renderer,
-        popupEnabled: true,
-        popupTemplate: {
-            outFields: ["BUILD_ID", "z", "classify"],
-            content: [
-                {
-                    type: "fields",
-                    fieldInfos: [
-                        {
-                            fieldName: "z",
-                            label: "Z"
-                        },
-                        {
-                            fieldName: "BUILD_ID",
-                            label: "BUILD ID",
-                        }, {
-                            fieldName: "classify",
-                            label: "Classify"
-                        },
-                    ]
-                }
-            ]
-        }
-
+    watchUtils.whenTrue( _view, 'stationary', () => {
+        console.log( 'View stop!!!' );
+        renderBuilding();
     } );
 
-    _map.add( buildingsLayer );
-
-
-
-    function getCenter() {
-        return [_view.center.longitude, _view.center.latitude];
-    }
-
-    _view.whenLayerView( buildingsLayer ).then( function ( layerView ) {
-        _buildingLayerView = layerView;
-        console.log( 'done' );
-
-        watchUtils.whenTrue( _view, 'stationary', () => {
-            console.log( 'View stop!!!' );
-            _center = getCenter();
-
-            _buildingLayerView.filter = new FeatureFilter( {
-                geometry: {
-                    type: "point",
-                    x: _center[0],
-                    y: _center[1],
-                },
-                spatialRelationship: "intersects",
-                distance: 1000,
-                units: "meters"
-            } );
-        } );
-
-
+    watchUtils.whenFalse( _view, 'stationary', () => {
+        console.log( 'View move!!!' );
+        _graphicsLayer.removeAll();
     } );
+
+    // _view.whenLayerView( buildingsLayer ).then( function ( layerView ) {
+    //     _buildingLayerView = layerView;
+    //     console.log( 'done' );
+
+    //     watchUtils.whenTrue( _view, 'stationary', () => {
+    //         console.log( 'View stop!!!' );
+    //         _center = getCenter();
+
+    //         _buildingLayerView.filter = new FeatureFilter( {
+    //             geometry: {
+    //                 type: "point",
+    //                 x: _center[0],
+    //                 y: _center[1],
+    //             },
+    //             spatialRelationship: "intersects",
+    //             distance: 1000,
+    //             units: "meters"
+    //         } );
+    //     } );
+    // } );
+
 } );
